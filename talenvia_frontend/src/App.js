@@ -4,6 +4,7 @@ import "./App.css";
 import { Topbar } from "./components/Topbar";
 import { Sidebar } from "./components/Sidebar";
 import { AppStateProvider } from "./state/AppStateContext";
+import { ToastProvider } from "./components/Toast";
 import OverviewPage from "./pages/OverviewPage";
 import ProfileSkillsPage from "./pages/ProfileSkillsPage";
 import JobsPage from "./pages/JobsPage";
@@ -31,38 +32,40 @@ function App() {
 
   return (
     <BrowserRouter>
-      <AppStateProvider>
-        <div className="tv-app">
-          <a className="visually-hidden" href="#main">
-            Skip to content
-          </a>
+      <ToastProvider>
+        <AppStateProvider>
+          <div className="tv-app">
+            <a className="visually-hidden" href="#main">
+              Skip to content
+            </a>
 
-          <Topbar onToggleSidebar={() => setIsSidebarOpen((v) => !v)} isSidebarOpen={isSidebarOpen} />
+            <Topbar onToggleSidebar={() => setIsSidebarOpen((v) => !v)} isSidebarOpen={isSidebarOpen} />
 
-          {isSidebarOpen ? (
-            <div className="tv-scrim" role="presentation" onClick={() => setIsSidebarOpen(false)} />
-          ) : null}
+            {isSidebarOpen ? (
+              <div className="tv-scrim" role="presentation" onClick={() => setIsSidebarOpen(false)} />
+            ) : null}
 
-          <div className="tv-shell">
-            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+            <div className="tv-shell">
+              <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-            <main id="main" className="tv-content" role="main" tabIndex={-1}>
-              <Routes>
-                <Route path="/" element={<OverviewPage />} />
-                <Route path="/profile-skills" element={<ProfileSkillsPage />} />
-                <Route path="/profile" element={<Navigate to="/profile-skills" replace />} />
-                <Route path="/skills" element={<Navigate to="/profile-skills" replace />} />
-                <Route path="/jobs" element={<JobsPage />} />
-                <Route path="/mock-tests" element={<MockTestsPage />} />
-                <Route path="/settings" element={<Navigate to="/" replace />} />
-                <Route path="/about" element={<AboutPage />} />
-                <Route path="/how-it-works" element={<HowItWorksPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </main>
+              <main id="main" className="tv-content" role="main" tabIndex={-1}>
+                <Routes>
+                  <Route path="/" element={<OverviewPage />} />
+                  <Route path="/profile-skills" element={<ProfileSkillsPage />} />
+                  <Route path="/profile" element={<Navigate to="/profile-skills" replace />} />
+                  <Route path="/skills" element={<Navigate to="/profile-skills" replace />} />
+                  <Route path="/jobs" element={<JobsPage />} />
+                  <Route path="/mock-tests" element={<MockTestsPage />} />
+                  <Route path="/settings" element={<Navigate to="/" replace />} />
+                  <Route path="/about" element={<AboutPage />} />
+                  <Route path="/how-it-works" element={<HowItWorksPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Routes>
+              </main>
+            </div>
           </div>
-        </div>
-      </AppStateProvider>
+        </AppStateProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 }

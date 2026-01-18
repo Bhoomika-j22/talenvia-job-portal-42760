@@ -9,6 +9,15 @@ function emptyToNull(value) {
 }
 
 async function requireAuthedUser(supabase) {
+  /**
+   * Prefer session-based auth detection first.
+   * This avoids cases where `getUser()` can return null without a strong error
+   * when the session isn't established yet.
+   */
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) return { ok: false, error: sessionError.message, user: null };
+  if (!sessionData?.session?.user) return { ok: false, error: "No active Supabase session. Please sign in.", user: null };
+
   const { data, error } = await supabase.auth.getUser();
   if (error) return { ok: false, error: error.message, user: null };
   if (!data?.user) return { ok: false, error: "Not authenticated.", user: null };
