@@ -1,48 +1,105 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppState } from "../state/AppStateContext";
 import { PageLayout } from "../components/PageLayout";
 import { Card, Button, Input, Textarea, Alert, Select, Badge } from "../components/ui";
 import { LinkRow, ProfileHeader, ReadonlyFieldRow, SectionTitle, SkillCard } from "../components/profile/ProfileComponents";
 import { getEnvConfig } from "../config/env";
 import { addSkill, getProfileAndSkills, removeSkill, saveProfile } from "../services/supabaseProfile";
+import { getSupabaseClient } from "../services/supabaseClient";
 
 const SKILL_LEVELS = ["Beginner", "Intermediate", "Advanced", "Expert"];
 
 /**
  * PUBLIC_INTERFACE
  * Recruiter-focused Profile page (Professional Profile + Skills & Expertise).
- * Uses the existing dashboard shell styles and AppStateContext actions so it stays
- * compatible with mock mode and is ready for Supabase integration later.
+ *
+ * Behavior:
+ * - Prefers Supabase when REACT_APP_SUPABASE_URL + REACT_APP_SUPABASE_ANON_KEY are present.
+ * - Uses feature flag (enableSupabase) as an additional signal, but NOT as a hard gate.
+ * - Falls back to local mock mode when Supabase is unavailable or user is not signed in.
+ *
+ * Runtime diagnostics:
+ * - Logs at mount and on Save with: hasUrl, hasKey, flagEnabled, isSignedIn, and datasource.
  */
 export default function ProfileSkillsPage() {
   const { state, actions } = useAppState();
-  const { enableSupabase } = getEnvConfig();
+  const env = getEnvConfig();
+
+  // Prefer Supabase if env vars are present, even if feature flag is missing.
+  const hasUrl = Boolean(env.supabaseUrl);
+  const hasKey = Boolean(env.supabaseAnonKey);
+  const flagEnabled = Boolean(env.enableSupabase);
 
   // Minimal status for Supabase operations (kept local to preserve existing global mock flows).
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState("");
   const [remoteInfo, setRemoteInfo] = useState("");
 
+  // If we detect mock bootstrap overwriting Supabase data on first render, ignore it once we load remote.
+  const didApplyRemoteRef = useRef(false);
+
   const showBusy = Boolean(state.loading || remoteLoading);
 
-  // Map Supabase profile row to existing UI shape.
-  const mapProfileRowToForm = useCallback(
-    (row) => {
-      if (!row) return null;
-      return {
-        fullName: row.full_name || "",
-        email: row.email || "",
-        headline: row.professional_headline || "",
-        location: row.location || "",
-        bio: row.professional_summary || "",
-        phone: row.phone || "",
-        portfolio: row.portfolio_url || "",
-        github: row.github_url || "",
-        linkedin: row.linkedin_url || "",
-      };
+  const showUiError = (message) => {
+    // Required by request: surface Supabase errors in UI (simple placeholder).
+    // eslint-disable-next-line no-alert
+    alert(message);
+  };
+
+  const getSupabaseDiagnostics = useCallback(async () => {
+    const supabase = getSupabaseClient();
+    const canUseSupabase = Boolean(supabase && hasUrl && hasKey);
+    let isSignedIn = false;
+
+    if (supabase) {
+      try {
+        // Prefer session check; it’s lightweight and indicates "signed in" clearly.
+        const { data } = await supabase.auth.getSession();
+        isSignedIn = Boolean(data?.session);
+      } catch {
+        isSignedIn = false;
+      }
+    }
+
+    // Datasource decision:
+    // - supabase when configured + signed-in
+    // - otherwise mock/local
+    const dataSource = canUseSupabase && isSignedIn ? "supabase" : "mock";
+
+    return { supabase, canUseSupabase, isSignedIn, dataSource };
+  }, [hasKey, hasUrl]);
+
+  const logDiagnostics = useCallback(
+    (eventName, diag) => {
+      // Explicit console diagnostics requested.
+      // eslint-disable-next-line no-console
+      console.info("[ProfileSkillsPage diagnostics]", {
+        event: eventName,
+        hasUrl,
+        hasKey,
+        flagEnabled,
+        isSignedIn: diag?.isSignedIn ?? false,
+        dataSource: diag?.dataSource ?? "unknown",
+      });
     },
-    []
+    [flagEnabled, hasKey, hasUrl]
   );
+
+  // Map Supabase profile row to existing UI shape.
+  const mapProfileRowToForm = useCallback((row) => {
+    if (!row) return null;
+    return {
+      fullName: row.full_name || "",
+      email: row.email || "",
+      headline: row.professional_headline || "",
+      location: row.location || "",
+      bio: row.professional_summary || "",
+      phone: row.phone || "",
+      portfolio: row.portfolio_url || "",
+      github: row.github_url || "",
+      linkedin: row.linkedin_url || "",
+    };
+  }, []);
 
   // Map Supabase skills rows to existing UI shape.
   const mapSkillsRowsToUi = useCallback((rows) => {
@@ -76,7 +133,9 @@ export default function ProfileSkillsPage() {
   const [profileForm, setProfileForm] = useState(initialProfile);
   const [profileSaved, setProfileSaved] = useState(false);
 
+  // Remove stale caching: if we already applied remote state, do not let later mock/bootstrap updates clobber the form.
   useEffect(() => {
+    if (didApplyRemoteRef.current) return;
     setProfileForm(initialProfile);
   }, [initialProfile]);
 
@@ -86,12 +145,21 @@ export default function ProfileSkillsPage() {
     setProfileForm((prev) => ({ ...prev, [key]: e.target.value }));
   };
 
-  // Load profile + skills from Supabase on mount (feature-flagged).
+  // Load profile + skills from Supabase on mount (auto-enabled if env vars exist).
   useEffect(() => {
     let cancelled = false;
 
     async function loadRemote() {
-      if (!enableSupabase) return;
+      const diag = await getSupabaseDiagnostics();
+      logDiagnostics("mount", diag);
+
+      if (diag.dataSource !== "supabase") {
+        // If Supabase is configured but user isn't signed in, show a helpful note in console and UI.
+        if (diag.canUseSupabase && !diag.isSignedIn) {
+          setRemoteInfo("Supabase configured, but you are not signed in. Using mock mode until you sign in.");
+        }
+        return;
+      }
 
       setRemoteError("");
       setRemoteInfo("");
@@ -101,16 +169,19 @@ export default function ProfileSkillsPage() {
       if (cancelled) return;
 
       if (!res.ok) {
-        // Graceful fallback: keep existing mock-loaded state, show minimal message.
         setRemoteError(res.error || "Failed to load from Supabase.");
         setRemoteLoading(false);
+        showUiError(res.error || "Failed to load from Supabase.");
         return;
       }
 
       // Apply to local page state + global context (so other screens reflect it).
+      didApplyRemoteRef.current = true;
+
       const mappedProfile = mapProfileRowToForm(res.profile);
       if (mappedProfile) {
         setProfileForm(mappedProfile);
+        // Keep app context in sync; this still calls stub api.updateProfile but ensures UI consistency across pages.
         await actions.saveProfile(mappedProfile);
       }
 
@@ -118,6 +189,7 @@ export default function ProfileSkillsPage() {
       await actions.saveSkills(mappedSkills);
 
       setRemoteLoading(false);
+      setRemoteInfo("Loaded from Supabase.");
     }
 
     loadRemote();
@@ -126,15 +198,18 @@ export default function ProfileSkillsPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enableSupabase, mapProfileRowToForm, mapSkillsRowsToUi]);
+  }, [getSupabaseDiagnostics, logDiagnostics, mapProfileRowToForm, mapSkillsRowsToUi]);
 
   const onSaveProfile = async () => {
     setProfileSaved(false);
     setRemoteError("");
     setRemoteInfo("");
 
-    // Default (mock) behavior: store locally.
-    if (!enableSupabase) {
+    const diag = await getSupabaseDiagnostics();
+    logDiagnostics("save_profile", diag);
+
+    // Fall back to mock/local behavior only if Supabase is unavailable OR user not signed in.
+    if (diag.dataSource !== "supabase") {
       await actions.saveProfile(profileForm);
       setProfileSaved(true);
       return;
@@ -156,12 +231,16 @@ export default function ProfileSkillsPage() {
     });
 
     if (!res.ok) {
-      setRemoteError(res.error || "Failed to save profile.");
+      const message = res.error || "Failed to save profile.";
+      setRemoteError(message);
       setRemoteLoading(false);
+      showUiError(message);
       return;
     }
 
     const mappedProfile = mapProfileRowToForm(res.profile);
+    didApplyRemoteRef.current = true;
+
     if (mappedProfile) {
       setProfileForm(mappedProfile);
       await actions.saveProfile(mappedProfile);
@@ -179,7 +258,11 @@ export default function ProfileSkillsPage() {
     setRemoteError("");
     setRemoteInfo("");
 
-    if (!enableSupabase) {
+    const diag = await getSupabaseDiagnostics();
+    logDiagnostics("refresh", diag);
+
+    if (diag.dataSource !== "supabase") {
+      // This will re-load mock data; acceptable fallback when not signed in or not configured.
       await actions.refreshProfile();
       return;
     }
@@ -188,12 +271,16 @@ export default function ProfileSkillsPage() {
 
     const res = await getProfileAndSkills();
     if (!res.ok) {
-      setRemoteError(res.error || "Failed to refresh from Supabase.");
+      const message = res.error || "Failed to refresh from Supabase.";
+      setRemoteError(message);
       setRemoteLoading(false);
+      showUiError(message);
       return;
     }
 
     const mappedProfile = mapProfileRowToForm(res.profile);
+    didApplyRemoteRef.current = true;
+
     if (mappedProfile) {
       setProfileForm(mappedProfile);
       await actions.saveProfile(mappedProfile);
@@ -226,11 +313,11 @@ export default function ProfileSkillsPage() {
     setRemoteError("");
     setRemoteInfo("");
 
-    if (!enableSupabase) {
-      const newSkills = [
-        ...skills,
-        { id: `s_${trimmed.toLowerCase().replace(/\s+/g, "_")}_${Date.now()}`, name: trimmed, level: skillLevel },
-      ];
+    const diag = await getSupabaseDiagnostics();
+    logDiagnostics("add_skill", diag);
+
+    if (diag.dataSource !== "supabase") {
+      const newSkills = [...skills, { id: `s_${trimmed.toLowerCase().replace(/\s+/g, "_")}_${Date.now()}`, name: trimmed, level: skillLevel }];
 
       setSkillName("");
       setSkillsSaved(false);
@@ -245,8 +332,10 @@ export default function ProfileSkillsPage() {
     const res = await addSkill(trimmed, proficiency);
 
     if (!res.ok) {
-      setRemoteError(res.error || "Failed to add skill.");
+      const message = res.error || "Failed to add skill.";
+      setRemoteError(message);
       setRemoteLoading(false);
+      showUiError(message);
       return;
     }
 
@@ -264,7 +353,10 @@ export default function ProfileSkillsPage() {
     setRemoteError("");
     setRemoteInfo("");
 
-    if (!enableSupabase) {
+    const diag = await getSupabaseDiagnostics();
+    logDiagnostics("remove_skill", diag);
+
+    if (diag.dataSource !== "supabase") {
       const newSkills = skills.filter((s) => s.id !== skill.id);
       setSkillsSaved(false);
       await actions.saveSkills(newSkills);
@@ -274,10 +366,15 @@ export default function ProfileSkillsPage() {
 
     setRemoteLoading(true);
 
-    const res = await removeSkill({ id: skill.id });
+    // Prefer deleting by skillName when the local id isn't a UUID from Supabase.
+    const looksLikeUuid = typeof skill.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(skill.id);
+    const res = await removeSkill(looksLikeUuid ? { id: skill.id } : { skillName: skill.name });
+
     if (!res.ok) {
-      setRemoteError(res.error || "Failed to remove skill.");
+      const message = res.error || "Failed to remove skill.";
+      setRemoteError(message);
       setRemoteLoading(false);
+      showUiError(message);
       return;
     }
 
@@ -296,7 +393,10 @@ export default function ProfileSkillsPage() {
     setRemoteError("");
     setRemoteInfo("");
 
-    if (!enableSupabase) {
+    const diag = await getSupabaseDiagnostics();
+    logDiagnostics("update_skill_level", diag);
+
+    if (diag.dataSource !== "supabase") {
       const newSkills = skills.map((s) => (s.id === skill.id ? { ...s, level: newLevel } : s));
       setSkillsSaved(false);
       await actions.saveSkills(newSkills);
@@ -311,8 +411,10 @@ export default function ProfileSkillsPage() {
     const res = await addSkill(skill.name, proficiency);
 
     if (!res.ok) {
-      setRemoteError(res.error || "Failed to update proficiency.");
+      const message = res.error || "Failed to update proficiency.";
+      setRemoteError(message);
       setRemoteLoading(false);
+      showUiError(message);
       return;
     }
 
@@ -323,6 +425,27 @@ export default function ProfileSkillsPage() {
     setRemoteLoading(false);
     setRemoteInfo("Proficiency updated.");
   };
+
+  const [dataSourceBadge, setDataSourceBadge] = useState("mock");
+  const [isSignedIn, setIsSignedIn] = useState(false);
+
+  // Keep a small, user-visible banner about the current datasource.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshDatasourceBadge() {
+      const diag = await getSupabaseDiagnostics();
+      if (cancelled) return;
+      setDataSourceBadge(diag.dataSource);
+      setIsSignedIn(Boolean(diag.isSignedIn));
+    }
+
+    refreshDatasourceBadge();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getSupabaseDiagnostics, remoteInfo, remoteError]);
 
   return (
     <PageLayout
@@ -339,9 +462,25 @@ export default function ProfileSkillsPage() {
         </>
       }
     >
+      {/* Inline mode banner */}
+      <div style={{ marginBottom: 12 }}>
+        <Alert tone="success" title="Data source">
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <Badge variant="primary">{dataSourceBadge === "supabase" ? "Supabase mode" : "Mock mode"}</Badge>
+            <span style={{ color: "var(--tv-text-muted)" }}>
+              {dataSourceBadge === "supabase"
+                ? "Reads/writes are using Supabase helpers."
+                : hasUrl && hasKey
+                  ? `Supabase is configured, but ${isSignedIn ? "it is not available right now" : "you are not signed in"} — using mocks.`
+                  : "Supabase env vars missing — using mocks."}
+            </span>
+          </div>
+        </Alert>
+      </div>
+
       {remoteLoading ? (
         <Alert tone="success" title="Loading">
-          Syncing with {enableSupabase ? "Supabase" : "local state"}…
+          Syncing with {dataSourceBadge === "supabase" ? "Supabase" : "local state"}…
         </Alert>
       ) : null}
 
@@ -363,14 +502,14 @@ export default function ProfileSkillsPage() {
 
       {profileSaved ? (
         <Alert tone="success" title="Profile saved">
-          Your professional profile has been updated {enableSupabase ? "in Supabase." : "(stored locally in mock mode)."}
+          Your professional profile has been updated {dataSourceBadge === "supabase" ? "in Supabase." : "(stored locally in mock mode)."}
         </Alert>
       ) : null}
 
       {skillsSaved ? (
         <div style={{ marginTop: 12 }}>
           <Alert tone="success" title="Skills updated">
-            Your skills list has been updated {enableSupabase ? "in Supabase." : "(stored locally in mock mode)."}
+            Your skills list has been updated {dataSourceBadge === "supabase" ? "in Supabase." : "(stored locally in mock mode)."}
           </Alert>
         </div>
       ) : null}
@@ -399,13 +538,7 @@ export default function ProfileSkillsPage() {
             <div className="tv-grid" style={{ gap: 12 }}>
               <SectionTitle title="Profile details" />
               <div className="tv-grid" style={{ gap: 12 }}>
-                <Input
-                  label="Full name"
-                  name="fullName"
-                  value={profileForm.fullName}
-                  onChange={onProfileChange("fullName")}
-                  placeholder="Your full name"
-                />
+                <Input label="Full name" name="fullName" value={profileForm.fullName} onChange={onProfileChange("fullName")} placeholder="Your full name" />
 
                 <Input
                   label="Professional headline"
@@ -416,21 +549,12 @@ export default function ProfileSkillsPage() {
                   hint="Example: Frontend Developer | React | Accessibility"
                 />
 
-                <Input
-                  label="Location"
-                  name="location"
-                  value={profileForm.location}
-                  onChange={onProfileChange("location")}
-                  placeholder="City, Country"
-                />
+                <Input label="Location" name="location" value={profileForm.location} onChange={onProfileChange("location")} placeholder="City, Country" />
               </div>
 
               <div className="tv-divider" />
 
-              <SectionTitle
-                title="Professional summary"
-                rightAccessory={<span style={{ fontSize: 12, color: "var(--tv-text-muted)" }}>3–4 lines</span>}
-              />
+              <SectionTitle title="Professional summary" rightAccessory={<span style={{ fontSize: 12, color: "var(--tv-text-muted)" }}>3–4 lines</span>} />
               <Textarea
                 label={null}
                 name="bio"
@@ -446,11 +570,7 @@ export default function ProfileSkillsPage() {
               <SectionTitle title="Contact information" />
 
               <div className="tv-grid" style={{ gap: 12 }}>
-                <ReadonlyFieldRow
-                  label="Email (verified)"
-                  value={profileForm.email}
-                  rightAccessory={<Badge variant="primary">Verified</Badge>}
-                />
+                <ReadonlyFieldRow label="Email (verified)" value={profileForm.email} rightAccessory={<Badge variant="primary">Verified</Badge>} />
 
                 <Input
                   label="Phone (optional)"
@@ -467,27 +587,9 @@ export default function ProfileSkillsPage() {
               <SectionTitle title="Links" rightAccessory={<span style={{ fontSize: 12, color: "var(--tv-text-muted)" }}>Optional</span>} />
 
               <div className="tv-grid" style={{ gap: 12 }}>
-                <Input
-                  label="Portfolio"
-                  name="portfolio"
-                  value={profileForm.portfolio || ""}
-                  onChange={onProfileChange("portfolio")}
-                  placeholder="https://your-portfolio.com"
-                />
-                <Input
-                  label="GitHub"
-                  name="github"
-                  value={profileForm.github || ""}
-                  onChange={onProfileChange("github")}
-                  placeholder="https://github.com/username"
-                />
-                <Input
-                  label="LinkedIn"
-                  name="linkedin"
-                  value={profileForm.linkedin || ""}
-                  onChange={onProfileChange("linkedin")}
-                  placeholder="https://linkedin.com/in/username"
-                />
+                <Input label="Portfolio" name="portfolio" value={profileForm.portfolio || ""} onChange={onProfileChange("portfolio")} placeholder="https://your-portfolio.com" />
+                <Input label="GitHub" name="github" value={profileForm.github || ""} onChange={onProfileChange("github")} placeholder="https://github.com/username" />
+                <Input label="LinkedIn" name="linkedin" value={profileForm.linkedin || ""} onChange={onProfileChange("linkedin")} placeholder="https://linkedin.com/in/username" />
               </div>
 
               <div style={{ marginTop: 4, display: "grid", gap: 10 }}>
@@ -519,9 +621,7 @@ export default function ProfileSkillsPage() {
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 950, letterSpacing: "-0.01em" }}>Skills & Expertise</div>
-                <div style={{ marginTop: 4, color: "var(--tv-text-muted)", fontSize: 13 }}>
-                  Add only skills you are confident to discuss in interviews.
-                </div>
+                <div style={{ marginTop: 4, color: "var(--tv-text-muted)", fontSize: 13 }}>Add only skills you are confident to discuss in interviews.</div>
               </div>
               <Badge variant="primary">{`${skills.length} skill${skills.length === 1 ? "" : "s"} added`}</Badge>
             </div>
@@ -555,10 +655,10 @@ export default function ProfileSkillsPage() {
                 </Button>
               </div>
 
-              {enableSupabase ? (
+              {dataSourceBadge === "supabase" ? (
                 <div style={{ color: "var(--tv-text-muted)", fontSize: 12, lineHeight: 1.5 }}>
-                  Note: Supabase proficiency supports <strong>Beginner</strong>, <strong>Intermediate</strong>, <strong>Advanced</strong>.{" "}
-                  Selecting <strong>Expert</strong> will be stored as <strong>Advanced</strong>.
+                  Note: Supabase proficiency supports <strong>Beginner</strong>, <strong>Intermediate</strong>, <strong>Advanced</strong>. Selecting{" "}
+                  <strong>Expert</strong> will be stored as <strong>Advanced</strong>.
                 </div>
               ) : null}
             </div>
@@ -566,19 +666,11 @@ export default function ProfileSkillsPage() {
             <div className="tv-divider" />
 
             {skills.length === 0 ? (
-              <div style={{ color: "var(--tv-text-muted)" }}>
-                No skills added yet. Start with 5–10 skills that match your target role.
-              </div>
+              <div style={{ color: "var(--tv-text-muted)" }}>No skills added yet. Start with 5–10 skills that match your target role.</div>
             ) : (
               <div className="tv-grid" style={{ gap: 12 }}>
                 {skills.map((s) => (
-                  <SkillCard
-                    key={s.id}
-                    skill={s}
-                    levels={SKILL_LEVELS}
-                    onChangeLevel={(lvl) => updateLevel(s, lvl)}
-                    onRemove={() => removeSkillHandler(s)}
-                  />
+                  <SkillCard key={s.id} skill={s} levels={SKILL_LEVELS} onChangeLevel={(lvl) => updateLevel(s, lvl)} onRemove={() => removeSkillHandler(s)} />
                 ))}
               </div>
             )}
