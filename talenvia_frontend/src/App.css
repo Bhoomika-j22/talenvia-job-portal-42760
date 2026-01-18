@@ -519,3 +519,144 @@ a {
     transition: none;
   }
 }
+
+/* ---------- Mobile-first Dark Settings (Naukri-like) ---------- */
+
+.tv-settings-screen {
+  /* Use an explicit dark surface for this screen (do not change global app shell). */
+  background: #0b1220;
+  color: rgba(255, 255, 255, 0.92);
+  border-radius: var(--tv-radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.tv-settings-inner {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 14px;
+}
+
+.tv-settings-header {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px 10px;
+}
+
+.tv-settings-back {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.tv-settings-back:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.tv-settings-title {
+  margin: 0;
+  text-align: center;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  font-weight: 800;
+}
+
+.tv-settings-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.tv-settings-item {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  border-radius: 18px;
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.18);
+  padding: 12px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.tv-settings-item:hover {
+  background: rgba(255, 255, 255, 0.085);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.tv-settings-item:active {
+  transform: translateY(1px);
+}
+
+.tv-settings-item-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 26px;
+  align-items: center;
+  gap: 12px;
+}
+
+.tv-settings-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(139, 92, 246, 0.16);
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  color: #c4b5fd;
+}
+
+.tv-settings-item-text {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.tv-settings-item-title {
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.tv-settings-item-subtitle {
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.tv-settings-item-right {
+  justify-self: end;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.tv-settings-footer {
+  padding: 18px 0 6px;
+  display: grid;
+  place-items: center;
+}
+
+.tv-settings-logout {
+  width: 100%;
+  max-width: 320px;
+  border-radius: 999px;
+  padding: 12px 14px;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  font-weight: 800;
+}
+
+.tv-settings-logout:hover {
+  background: rgba(59, 130, 246, 0.18);
+}
