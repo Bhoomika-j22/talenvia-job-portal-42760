@@ -21,7 +21,7 @@ export function Topbar({ onToggleSidebar, isSidebarOpen }) {
           <div className="tv-brand-mark" aria-hidden="true" />
           <div className="tv-brand-text">
             <strong>Talenvia</strong>
-            <span>Jobs • Skills • Mock Tests</span>
+            <span>Talent+journey</span>
           </div>
         </div>
 
