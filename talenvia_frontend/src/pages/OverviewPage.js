@@ -23,8 +23,8 @@ export default function OverviewPage() {
       subtitle="A calm, elegant workspace for your job search — keep your profile and skills updated, then apply with confidence."
       actions={
         <>
-          <Button as={Link} to="/profile" variant="secondary">
-            Update Profile
+          <Button as={Link} to="/profile-skills" variant="secondary">
+            Update Profile & Skills
           </Button>
           <Button as={Link} to="/jobs" variant="primary">
             Find Jobs
@@ -78,8 +78,8 @@ export default function OverviewPage() {
             You currently track <strong style={{ color: "var(--tv-text)" }}>{state.skills.length}</strong> skills.
           </div>
           <div style={{ marginTop: 12 }}>
-            <Button as={Link} to="/skills" variant="ghost">
-              Manage Skills
+            <Button as={Link} to="/profile-skills" variant="ghost">
+              Manage Profile & Skills
             </Button>
           </div>
         </Card>

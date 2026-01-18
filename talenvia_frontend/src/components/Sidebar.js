@@ -37,8 +37,13 @@ export function Sidebar({ isOpen, onClose }) {
       <div className="tv-nav-section-title">Platform</div>
       <ul className="tv-nav-list">
         <NavItem to="/" icon="🏠" label="Overview" desc="Your Talenvia dashboard" onNavigate={handleNavigate} />
-        <NavItem to="/profile" icon="👤" label="Profile" desc="Manage your information" onNavigate={handleNavigate} />
-        <NavItem to="/skills" icon="✨" label="Skills" desc="Track and improve skills" onNavigate={handleNavigate} />
+        <NavItem
+          to="/profile-skills"
+          icon="👤"
+          label="Profile & Skills"
+          desc="Profile details + skill tracking"
+          onNavigate={handleNavigate}
+        />
         <NavItem to="/jobs" icon="💼" label="Jobs" desc="Search and apply" onNavigate={handleNavigate} />
         <NavItem to="/mock-tests" icon="🧠" label="Mock Tests" desc="Practice interviews" onNavigate={handleNavigate} />
         <NavItem to="/settings" icon="⚙️" label="Settings" desc="Preferences & privacy" onNavigate={handleNavigate} />

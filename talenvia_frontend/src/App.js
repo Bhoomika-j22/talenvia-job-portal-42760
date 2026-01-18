@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import { Topbar } from "./components/Topbar";
 import { Sidebar } from "./components/Sidebar";
 import { AppStateProvider } from "./state/AppStateContext";
 import OverviewPage from "./pages/OverviewPage";
-import ProfilePage from "./pages/ProfilePage";
-import SkillsPage from "./pages/SkillsPage";
+import ProfileSkillsPage from "./pages/ProfileSkillsPage";
 import JobsPage from "./pages/JobsPage";
 import MockTestsPage from "./pages/MockTestsPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -50,8 +49,9 @@ function App() {
             <main id="main" className="tv-content" role="main" tabIndex={-1}>
               <Routes>
                 <Route path="/" element={<OverviewPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/skills" element={<SkillsPage />} />
+                <Route path="/profile-skills" element={<ProfileSkillsPage />} />
+                <Route path="/profile" element={<Navigate to="/profile-skills" replace />} />
+                <Route path="/skills" element={<Navigate to="/profile-skills" replace />} />
                 <Route path="/jobs" element={<JobsPage />} />
                 <Route path="/mock-tests" element={<MockTestsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
