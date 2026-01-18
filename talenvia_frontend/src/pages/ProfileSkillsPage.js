@@ -2,18 +2,19 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useAppState } from "../state/AppStateContext";
 import { PageLayout } from "../components/PageLayout";
 import { Card, Button, Input, Textarea, Alert, Select, Badge } from "../components/ui";
+import { LinkRow, ProfileHeader, ReadonlyFieldRow, SectionTitle, SkillCard } from "../components/profile/ProfileComponents";
 
-const LEVELS = ["Beginner", "Intermediate", "Advanced"];
+const SKILL_LEVELS = ["Beginner", "Intermediate", "Advanced", "Expert"];
 
 /**
  * PUBLIC_INTERFACE
- * Combined Profile & Skills management page.
- * Reuses global state/actions from AppStateContext (no duplicated state layer).
+ * Recruiter-focused Profile page (Professional Profile + Skills & Expertise).
+ * Uses the existing dashboard shell styles and AppStateContext actions so it stays
+ * compatible with mock mode and is ready for Supabase integration later.
  */
 export default function ProfileSkillsPage() {
   const { state, actions } = useAppState();
 
-  // ----- Profile form (mirrors existing ProfilePage behavior) -----
   const initialProfile = useMemo(
     () =>
       state.profile || {
@@ -22,6 +23,10 @@ export default function ProfileSkillsPage() {
         headline: "",
         location: "",
         bio: "",
+        phone: "",
+        portfolio: "",
+        github: "",
+        linkedin: "",
       },
     [state.profile]
   );
@@ -40,11 +45,17 @@ export default function ProfileSkillsPage() {
 
   const onSaveProfile = async () => {
     setProfileSaved(false);
+    // Keep behavior non-breaking: we store whatever the form holds. Backend/Supabase can validate later.
     await actions.saveProfile(profileForm);
     setProfileSaved(true);
   };
 
-  // ----- Skills management (mirrors existing SkillsPage behavior) -----
+  const onRefresh = async () => {
+    setProfileSaved(false);
+    await actions.refreshProfile();
+  };
+
+  // Skills
   const skills = useMemo(() => state.skills || [], [state.skills]);
   const [skillName, setSkillName] = useState("");
   const [skillLevel, setSkillLevel] = useState("Intermediate");
@@ -81,12 +92,12 @@ export default function ProfileSkillsPage() {
 
   return (
     <PageLayout
-      title="Profile & Skills"
-      subtitle="Update your profile basics and keep your skills list aligned to the roles you’re targeting — all in one place."
+      title="Profile"
+      subtitle="A clean, recruiter-ready profile and skills summary inside your Talenvia dashboard."
       actions={
         <>
-          <Button variant="secondary" onClick={() => actions.refreshProfile()} disabled={state.loading}>
-            Refresh Profile
+          <Button variant="secondary" onClick={onRefresh} disabled={state.loading}>
+            Reset / Refresh
           </Button>
           <Button variant="primary" onClick={onSaveProfile} disabled={state.loading}>
             Save Profile
@@ -96,14 +107,14 @@ export default function ProfileSkillsPage() {
     >
       {profileSaved ? (
         <Alert tone="success" title="Profile saved">
-          Your profile changes have been stored (stubbed locally for now).
+          Your professional profile has been updated (stored locally in mock mode).
         </Alert>
       ) : null}
 
       {skillsSaved ? (
         <div style={{ marginTop: 12 }}>
           <Alert tone="success" title="Skills updated">
-            Skills saved (stubbed locally for now).
+            Your skills list has been updated (stored locally in mock mode).
           </Alert>
         </div>
       ) : null}
@@ -117,86 +128,159 @@ export default function ProfileSkillsPage() {
       ) : null}
 
       <div style={{ marginTop: 12 }} className="tv-grid two">
-        {/* Left: Profile */}
+        {/* Left column: Professional Profile */}
         <div className="tv-grid" style={{ gap: 12 }}>
-          <Card aria-label="Profile editor">
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <strong>Profile</strong>
-              <Badge variant="primary">Basics</Badge>
-            </div>
+          <Card aria-label="Professional profile">
+            <ProfileHeader
+              fullName={profileForm.fullName}
+              headline={profileForm.headline}
+              location={profileForm.location}
+              rightAccessory={<Badge variant="primary">Professional Profile</Badge>}
+            />
+
             <div className="tv-divider" />
+
             <div className="tv-grid" style={{ gap: 12 }}>
-              <Input
-                label="Full name"
-                name="fullName"
-                value={profileForm.fullName}
-                onChange={onProfileChange("fullName")}
-                placeholder="Your full name"
-              />
-              <Input
-                label="Email"
-                name="email"
-                value={profileForm.email}
-                onChange={onProfileChange("email")}
-                placeholder="name@example.com"
-                hint="Used for application confirmations (mocked)."
-                inputMode="email"
-              />
-              <Input
-                label="Location"
-                name="location"
-                value={profileForm.location}
-                onChange={onProfileChange("location")}
-                placeholder="City, Country"
-              />
-              <Input
-                label="Headline"
-                name="headline"
-                value={profileForm.headline}
-                onChange={onProfileChange("headline")}
-                placeholder="Role • Key skills • Impact"
-                hint="Example: React Engineer • Accessibility • Design systems."
-              />
+              <SectionTitle title="Profile details" />
+              <div className="tv-grid" style={{ gap: 12 }}>
+                <Input
+                  label="Full name"
+                  name="fullName"
+                  value={profileForm.fullName}
+                  onChange={onProfileChange("fullName")}
+                  placeholder="Your full name"
+                />
+
+                <Input
+                  label="Professional headline"
+                  name="headline"
+                  value={profileForm.headline}
+                  onChange={onProfileChange("headline")}
+                  placeholder="Target role | Core skills | Specialty"
+                  hint="Example: Frontend Developer | React | Accessibility"
+                />
+
+                <Input
+                  label="Location"
+                  name="location"
+                  value={profileForm.location}
+                  onChange={onProfileChange("location")}
+                  placeholder="City, Country"
+                />
+              </div>
+
+              <div className="tv-divider" />
+
+              <SectionTitle title="Professional summary" rightAccessory={<span style={{ fontSize: 12, color: "var(--tv-text-muted)" }}>3–4 lines</span>} />
               <Textarea
-                label="Bio"
+                label={null}
                 name="bio"
-                rows={6}
+                rows={5}
                 value={profileForm.bio}
                 onChange={onProfileChange("bio")}
-                placeholder="A short summary of your strengths and what roles you're looking for."
+                placeholder="Write a concise summary of your strengths, impact, and the roles you are targeting."
+                hint="Use confident, recruiter-friendly language. Keep it focused on outcomes and strengths."
               />
-            </div>
 
-            <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Button variant="secondary" onClick={() => actions.refreshProfile()} disabled={state.loading}>
-                Refresh
-              </Button>
-              <Button variant="primary" onClick={onSaveProfile} disabled={state.loading}>
-                Save Profile
-              </Button>
+              <div className="tv-divider" />
+
+              <SectionTitle title="Contact information" />
+
+              <div className="tv-grid" style={{ gap: 12 }}>
+                <ReadonlyFieldRow
+                  label="Email (verified)"
+                  value={profileForm.email}
+                  rightAccessory={<Badge variant="primary">Verified</Badge>}
+                />
+
+                <Input
+                  label="Phone (optional)"
+                  name="phone"
+                  value={profileForm.phone || ""}
+                  onChange={onProfileChange("phone")}
+                  placeholder="+91 98xxxxxx"
+                  inputMode="tel"
+                />
+              </div>
+
+              <div className="tv-divider" />
+
+              <SectionTitle title="Links" rightAccessory={<span style={{ fontSize: 12, color: "var(--tv-text-muted)" }}>Optional</span>} />
+
+              <div className="tv-grid" style={{ gap: 12 }}>
+                <Input
+                  label="Portfolio"
+                  name="portfolio"
+                  value={profileForm.portfolio || ""}
+                  onChange={onProfileChange("portfolio")}
+                  placeholder="https://your-portfolio.com"
+                />
+                <Input
+                  label="GitHub"
+                  name="github"
+                  value={profileForm.github || ""}
+                  onChange={onProfileChange("github")}
+                  placeholder="https://github.com/username"
+                />
+                <Input
+                  label="LinkedIn"
+                  name="linkedin"
+                  value={profileForm.linkedin || ""}
+                  onChange={onProfileChange("linkedin")}
+                  placeholder="https://linkedin.com/in/username"
+                />
+              </div>
+
+              <div style={{ marginTop: 4, display: "grid", gap: 10 }}>
+                <div style={{ color: "var(--tv-text-muted)", fontSize: 12, lineHeight: 1.45 }}>
+                  Preview:
+                  <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
+                    <LinkRow label="Portfolio" value={profileForm.portfolio} />
+                    <LinkRow label="GitHub" value={profileForm.github} />
+                    <LinkRow label="LinkedIn" value={profileForm.linkedin} />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <Button variant="secondary" onClick={onRefresh} disabled={state.loading}>
+                    Reset / Refresh
+                  </Button>
+                  <Button variant="primary" onClick={onSaveProfile} disabled={state.loading}>
+                    Save Profile
+                  </Button>
+                </div>
+              </div>
             </div>
           </Card>
         </div>
 
-        {/* Right: Skills */}
+        {/* Right column: Skills & Expertise */}
         <div className="tv-grid" style={{ gap: 12 }}>
-          <Card aria-label="Skills editor">
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <strong>Skills</strong>
-              <Badge variant="primary">{skills.length} tracked</Badge>
+          <Card aria-label="Skills and expertise">
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 950, letterSpacing: "-0.01em" }}>Skills & Expertise</div>
+                <div style={{ marginTop: 4, color: "var(--tv-text-muted)", fontSize: 13 }}>
+                  Add only skills you are confident to discuss in interviews.
+                </div>
+              </div>
+              <Badge variant="primary">{`${skills.length} skill${skills.length === 1 ? "" : "s"} added`}</Badge>
             </div>
+
             <div className="tv-divider" />
 
+            <SectionTitle title="Add skill" />
             <div className="tv-grid" style={{ gap: 12 }}>
               <Input
-                label="Add a new skill"
+                label="Skill name"
                 value={skillName}
                 onChange={(e) => setSkillName(e.target.value)}
-                placeholder="e.g., React, SQL, Communication"
-                hint="Use the same naming you would put on a resume."
+                placeholder="e.g., React, SQL, Stakeholder communication"
+                hint="Use resume-style naming."
               />
+
               <Select label="Proficiency" value={skillLevel} onChange={(e) => setSkillLevel(e.target.value)}>
-                {LEVELS.map((l) => (
+                {SKILL_LEVELS.map((l) => (
                   <option key={l} value={l}>
                     {l}
                   </option>
@@ -216,53 +300,21 @@ export default function ProfileSkillsPage() {
             <div className="tv-divider" />
 
             {skills.length === 0 ? (
-              <p style={{ margin: 0, color: "var(--tv-text-muted)" }}>No skills added yet.</p>
+              <div style={{ color: "var(--tv-text-muted)" }}>
+                No skills added yet. Start with 5–10 skills that match your target role.
+              </div>
             ) : (
-              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 10 }}>
+              <div className="tv-grid" style={{ gap: 12 }}>
                 {skills.map((s) => (
-                  <li
+                  <SkillCard
                     key={s.id}
-                    style={{
-                      border: "1px solid var(--tv-border)",
-                      borderRadius: 12,
-                      padding: 10,
-                      display: "flex",
-                      gap: 10,
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                        {s.name} <Badge variant="primary">{s.level}</Badge>
-                      </div>
-                      <div style={{ fontSize: 12, color: "var(--tv-text-muted)", marginTop: 4 }}>
-                        Tip: Attach a project or result that demonstrates this skill.
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <select
-                        className="tv-select"
-                        aria-label={`Change level for ${s.name}`}
-                        value={s.level}
-                        onChange={(e) => updateLevel(s.id, e.target.value)}
-                        style={{ width: 160 }}
-                      >
-                        {LEVELS.map((l) => (
-                          <option key={l} value={l}>
-                            {l}
-                          </option>
-                        ))}
-                      </select>
-                      <Button variant="secondary" onClick={() => removeSkill(s.id)} aria-label={`Remove ${s.name}`}>
-                        Remove
-                      </Button>
-                    </div>
-                  </li>
+                    skill={s}
+                    levels={SKILL_LEVELS}
+                    onChangeLevel={(lvl) => updateLevel(s.id, lvl)}
+                    onRemove={() => removeSkill(s.id)}
+                  />
                 ))}
-              </ul>
+              </div>
             )}
           </Card>
         </div>
