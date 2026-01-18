@@ -125,6 +125,9 @@ a {
   flex: 1;
   min-width: 160px;
   max-width: 520px;
+
+  /* Nudge the global search slightly right without affecting other topbar items. */
+  margin-left: 10px;
 }
 
 .tv-topbar-search-input {
@@ -499,6 +502,9 @@ a {
   .tv-topbar-search {
     max-width: none;
     min-width: 0;
+
+    /* Avoid any extra horizontal offset that could cause crowding/overlap. */
+    margin-left: 0;
   }
 
   .tv-topbar-search-input {
