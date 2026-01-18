@@ -11,7 +11,7 @@ export default function AboutPage() {
   return (
     <PageLayout
       title="About Us"
-      subtitle="Talenvia is a modern career platform that helps you build a strong profile, showcase your skills, and find relevant opportunities with personalized guidance."
+      subtitle="Helping early-career professionals build strong profiles and move forward with clarity."
       actions={<Badge variant="primary">Royal Purple</Badge>}
     >
       {/* Order requested: About Talenvia intro first, then Key Features */}
