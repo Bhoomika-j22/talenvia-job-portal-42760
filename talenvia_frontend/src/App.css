@@ -121,6 +121,25 @@ a {
   color: var(--tv-text-muted);
 }
 
+.tv-topbar-search {
+  flex: 1;
+  min-width: 160px;
+  max-width: 520px;
+}
+
+.tv-topbar-search-input {
+  height: 42px;
+  border-radius: 999px;
+  border-color: rgba(139, 92, 246, 0.22);
+  background: rgba(255, 255, 255, 0.9);
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.tv-topbar-search-input:focus-visible {
+  box-shadow: var(--tv-ring);
+}
+
 .tv-topbar-spacer {
   flex: 1;
 }
@@ -405,6 +424,13 @@ a {
   margin: 14px 0;
 }
 
+.tv-highlight {
+  background: rgba(139, 92, 246, 0.18);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 6px;
+}
+
 /* ---------- Responsive ---------- */
 
 .tv-mobile-only {
@@ -459,6 +485,24 @@ a {
   .tv-grid.two,
   .tv-grid.three {
     grid-template-columns: 1fr;
+  }
+
+  .tv-topbar-inner {
+    gap: 10px;
+  }
+
+  .tv-brand {
+    min-width: 0;
+  }
+
+  /* On small screens, keep the global search but prevent it from breaking layout. */
+  .tv-topbar-search {
+    max-width: none;
+    min-width: 0;
+  }
+
+  .tv-topbar-search-input {
+    height: 40px;
   }
 }
 

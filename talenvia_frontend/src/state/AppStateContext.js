@@ -28,6 +28,9 @@ function reducer(state, action) {
     case "SET_ACTIVE_TEST":
       return { ...state, activeTestSession: action.session };
 
+    case "SET_SEARCH_QUERY":
+      return { ...state, searchQuery: action.query };
+
     default:
       return state;
   }
@@ -47,6 +50,9 @@ export function AppStateProvider({ children }) {
     jobs: [],
     tests: [],
     activeTestSession: null,
+
+    // Global header search query (used by Jobs now; other pages may ignore).
+    searchQuery: "",
   });
 
   useEffect(() => {
@@ -110,6 +116,12 @@ export function AppStateProvider({ children }) {
         } catch (err) {
           dispatch({ type: "LOAD_ERROR", error: String(err?.message || err) });
         }
+      },
+
+      // PUBLIC_INTERFACE
+      setSearchQuery(query) {
+        /** Updates the global header search query so multiple pages can respond. */
+        dispatch({ type: "SET_SEARCH_QUERY", query: String(query ?? "") });
       },
 
       // PUBLIC_INTERFACE
