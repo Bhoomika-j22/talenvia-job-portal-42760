@@ -1,6 +1,7 @@
 import { getEnvConfig } from "../config/env";
 import { mockJobs, mockProfile, mockSkills, mockTests } from "../mocks/data";
 import { logger } from "../utils/logger";
+import { fetchExampleItems } from "./supabaseData";
 
 /**
  * Simulates latency in mock mode for more realistic UX.
@@ -23,6 +24,7 @@ function getBaseUrl() {
  */
 export function createApiClient() {
   const baseUrl = getBaseUrl();
+  const { enableSupabase } = getEnvConfig();
 
   async function fetchJson(path, options = {}) {
     if (!baseUrl) return null;
@@ -99,6 +101,32 @@ export function createApiClient() {
       await delay(220);
       logger.info("Stub: startMockTest", { testId });
       return { ok: true, sessionId: `test_${testId}_${Date.now()}` };
+    },
+
+    /**
+     * Optional Supabase path example.
+     * Not currently used by the UI; meant as a safe integration point.
+     *
+     * To switch from mocks to Supabase data reads:
+     * 1) Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY
+     * 2) Set REACT_APP_FEATURE_FLAGS='{"enableSupabase": true}'
+     * 3) Create the placeholder table (default: tv_example_items)
+     */
+    async listExampleItems() {
+      await delay(120);
+
+      if (!enableSupabase) {
+        // Default behavior: no Supabase usage.
+        return [];
+      }
+
+      const res = await fetchExampleItems({ table: "tv_example_items", limit: 5 });
+      if (!res.ok) {
+        // Non-breaking fallback: return empty array and log debug to avoid surfacing errors.
+        logger.debug("Supabase example fetch failed; returning empty list.", { error: res.error });
+        return [];
+      }
+      return res.items;
     },
   };
 }

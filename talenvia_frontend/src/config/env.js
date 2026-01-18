@@ -27,6 +27,23 @@ export function getEnvConfig() {
 
   const experimentsEnabled = String(process.env.REACT_APP_EXPERIMENTS_ENABLED || "false") === "true";
 
+  /**
+   * Supabase env handling notes:
+   * - CRA only exposes env vars prefixed with REACT_APP_ at build time.
+   * - The platform currently provides SUPABASE_URL / SUPABASE_KEY (non-REACT prefixes).
+   * - To enable Supabase on the frontend, map them to:
+   *   - REACT_APP_SUPABASE_URL
+   *   - REACT_APP_SUPABASE_ANON_KEY
+   *
+   * Existing mock flows remain default. Turn on Supabase paths by setting:
+   *   REACT_APP_FEATURE_FLAGS='{"enableSupabase": true}'
+   */
+  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || "";
+  const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || "";
+
+  // Feature flag gate (defaults to false so we never break mock flows).
+  const enableSupabase = Boolean(featureFlags?.enableSupabase);
+
   return {
     apiBase,
     backendUrl,
@@ -36,5 +53,10 @@ export function getEnvConfig() {
     logLevel,
     featureFlags,
     experimentsEnabled,
+
+    // Supabase (optional)
+    supabaseUrl,
+    supabaseAnonKey,
+    enableSupabase,
   };
 }
