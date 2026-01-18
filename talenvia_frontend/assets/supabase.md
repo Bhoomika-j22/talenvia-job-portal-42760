@@ -1,5 +1,16 @@
 # Supabase integration (Talenvia frontend)
 
+## Reset completed (mock mode)
+Supabase wiring has been reset to a neutral state. The app currently runs in **mock mode** with no Supabase banners/diagnostics and no runtime env injection.
+
+To reconfigure later:
+1. Set:
+   - `REACT_APP_SUPABASE_URL`
+   - `REACT_APP_SUPABASE_ANON_KEY`
+   - `REACT_APP_FEATURE_FLAGS={"enableSupabase": true}`
+2. Sign in (Supabase Auth) so a session exists.
+3. Re-enable the Supabase paths in `src/pages/ProfileSkillsPage.js` by uncommenting/restoring the TODO sections.
+
 This project includes optional Supabase integration behind a feature flag so the default mock flows remain non-breaking.
 
 ## Environment variables (Create React App)
