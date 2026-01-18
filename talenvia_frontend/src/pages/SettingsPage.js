@@ -46,6 +46,11 @@ function IconBlock(props) {
 /**
  * PUBLIC_INTERFACE
  * Settings page inside the standard Talenvia dashboard layout (sidebar + main content).
+ *
+ * NOTE: The dashboard no longer exposes Settings in navigation, and `/settings` is
+ * redirected to `/` (Overview) for safety. This file is intentionally kept for
+ * potential future reuse.
+ *
  * Renders a centered dark glassmorphism card that contains:
  * - Back button + centered title
  * - Stacked settings options (via reusable SettingsItem)

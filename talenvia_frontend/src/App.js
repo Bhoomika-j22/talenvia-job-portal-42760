@@ -8,7 +8,7 @@ import OverviewPage from "./pages/OverviewPage";
 import ProfileSkillsPage from "./pages/ProfileSkillsPage";
 import JobsPage from "./pages/JobsPage";
 import MockTestsPage from "./pages/MockTestsPage";
-import SettingsPage from "./pages/SettingsPage";
+
 import AboutPage from "./pages/AboutPage";
 import HowItWorksPage from "./pages/HowItWorksPage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -54,7 +54,7 @@ function App() {
                 <Route path="/skills" element={<Navigate to="/profile-skills" replace />} />
                 <Route path="/jobs" element={<JobsPage />} />
                 <Route path="/mock-tests" element={<MockTestsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings" element={<Navigate to="/" replace />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/how-it-works" element={<HowItWorksPage />} />
                 <Route path="*" element={<NotFoundPage />} />

@@ -46,7 +46,6 @@ export function Sidebar({ isOpen, onClose }) {
         />
         <NavItem to="/jobs" icon="💼" label="Jobs" desc="Search and apply" onNavigate={handleNavigate} />
         <NavItem to="/mock-tests" icon="🧠" label="Mock Tests" desc="Practice interviews" onNavigate={handleNavigate} />
-        <NavItem to="/settings" icon="⚙️" label="Settings" desc="Preferences & privacy" onNavigate={handleNavigate} />
       </ul>
 
       <div className="tv-nav-section-title" style={{ marginTop: 12 }}>
