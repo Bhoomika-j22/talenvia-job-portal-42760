@@ -3,7 +3,7 @@ import { useAppState } from "../state/AppStateContext";
 import { PageLayout } from "../components/PageLayout";
 import { Card, Button, Input, Textarea, Alert, Select, Badge } from "../components/ui";
 import { LinkRow, ProfileHeader, ReadonlyFieldRow, SectionTitle, SkillCard } from "../components/profile/ProfileComponents";
-import { getEnvConfig } from "../config/env";
+import { getEnvConfig, isSupabaseConfigured, isSupabaseEnabled } from "../config/env";
 import { addSkill, getProfileAndSkills, removeSkill, saveProfile } from "../services/supabaseProfile";
 import { getSupabaseClient } from "../services/supabaseClient";
 import { useToast } from "../components/Toast";
@@ -15,19 +15,21 @@ const SKILL_LEVELS = ["Beginner", "Intermediate", "Advanced", "Expert"];
  * Recruiter-focused Profile page (Professional Profile + Skills & Expertise).
  *
  * Behavior:
- * - Prefers Supabase when REACT_APP_SUPABASE_URL + REACT_APP_SUPABASE_ANON_KEY are present.
- * - Uses feature flag (enableSupabase) as an additional signal, but NOT as a hard gate.
- * - Falls back to local mock mode when Supabase is unavailable or user is not signed in.
- *
- * Runtime diagnostics:
- * - Logs at mount and on Save with: hasUrl, hasKey, flagEnabled, isSignedIn, and datasource.
+ * - Uses env.js as the single source of truth for Supabase config + flags.
+ * - Uses Supabase whenever:
+ *   - env.js reports configured=true (url+anon key), AND
+ *   - env.js reports enabled=true (explicit flag OR configured implies enabled), AND
+ *   - a Supabase session exists.
+ * - Falls back to mock/local mode when Supabase is unavailable or user is not signed in.
  */
 export default function ProfileSkillsPage() {
   const { state, actions } = useAppState();
   const env = getEnvConfig();
   const toast = useToast();
 
-  // Prefer Supabase if env vars are present, even if feature flag is missing.
+  const configured = isSupabaseConfigured();
+  const enabled = isSupabaseEnabled();
+
   const hasUrl = Boolean(env.supabaseUrl);
   const hasKey = Boolean(env.supabaseAnonKey);
   const flagEnabled = Boolean(env.enableSupabase);
@@ -43,15 +45,23 @@ export default function ProfileSkillsPage() {
   const showBusy = Boolean(state.loading || remoteLoading);
 
   const getSupabaseDiagnostics = useCallback(async () => {
-    const supabase = getSupabaseClient();
-    const isConfigured = Boolean(supabase && hasUrl && hasKey);
-
-    // If env vars are not present, Supabase is definitively unavailable.
-    if (!isConfigured) {
-      return { supabase: null, isConfigured: false, isSignedIn: false, dataSource: "mock" };
+    // IMPORTANT: do not construct/assume client unless env.js says it's enabled+configured.
+    if (!enabled || !configured) {
+      return {
+        supabase: null,
+        isConfigured: configured,
+        isEnabled: enabled,
+        isSignedIn: false,
+        dataSource: "mock",
+      };
     }
 
-    // Configured → check session explicitly.
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return { supabase: null, isConfigured: configured, isEnabled: enabled, isSignedIn: false, dataSource: "mock" };
+    }
+
+    // Configured+enabled → check session explicitly.
     let isSignedIn = false;
     let sessionError = null;
 
@@ -65,12 +75,12 @@ export default function ProfileSkillsPage() {
     }
 
     // Datasource decision:
-    // - supabase when configured + signed-in
+    // - supabase when enabled+configured+signed-in
     // - otherwise mock/local
     const dataSource = isSignedIn ? "supabase" : "mock";
 
-    return { supabase, isConfigured: true, isSignedIn, sessionError, dataSource };
-  }, [hasKey, hasUrl]);
+    return { supabase, isConfigured: configured, isEnabled: enabled, isSignedIn, sessionError, dataSource };
+  }, [configured, enabled]);
 
   const logDiagnostics = useCallback(
     (eventName, diag) => {
@@ -81,13 +91,14 @@ export default function ProfileSkillsPage() {
         hasUrl,
         hasKey,
         flagEnabled,
-        isConfigured: diag?.isConfigured ?? false,
+        configured,
+        enabled,
         isSignedIn: diag?.isSignedIn ?? false,
         dataSource: diag?.dataSource ?? "unknown",
         sessionError: diag?.sessionError ? String(diag.sessionError?.message || diag.sessionError) : null,
       });
     },
-    [flagEnabled, hasKey, hasUrl]
+    [configured, enabled, flagEnabled, hasKey, hasUrl]
   );
 
   // Map Supabase profile row to existing UI shape.
@@ -150,7 +161,7 @@ export default function ProfileSkillsPage() {
     setProfileForm((prev) => ({ ...prev, [key]: e.target.value }));
   };
 
-  // Load profile + skills from Supabase on mount (auto-enabled if env vars exist).
+  // Load profile + skills from Supabase on mount (auto-enabled if env.js says enabled+configured).
   useEffect(() => {
     let cancelled = false;
 
@@ -159,9 +170,13 @@ export default function ProfileSkillsPage() {
       logDiagnostics("mount", diag);
 
       if (diag.dataSource !== "supabase") {
-        if (diag.isConfigured && !diag.isSignedIn) {
+        if (enabled && configured && !diag.isSignedIn) {
           const detail = diag.sessionError?.message ? ` (${diag.sessionError.message})` : "";
-          setRemoteInfo(`Supabase is configured, but there is no active session${detail}. Sign in to enable live save/load.`);
+          setRemoteInfo(`Supabase is ready, but there is no active session${detail}. Sign in to enable live save/load.`);
+        } else if (!configured) {
+          setRemoteInfo("Supabase is not configured — using mocks.");
+        } else if (!enabled) {
+          setRemoteInfo("Supabase is configured but disabled by feature flag — using mocks.");
         }
         return;
       }
@@ -208,7 +223,7 @@ export default function ProfileSkillsPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getSupabaseDiagnostics, logDiagnostics, mapProfileRowToForm, mapSkillsRowsToUi]);
+  }, [enabled, configured, getSupabaseDiagnostics, logDiagnostics, mapProfileRowToForm, mapSkillsRowsToUi]);
 
   const onSaveProfile = async () => {
     setProfileSaved(false);
@@ -218,18 +233,21 @@ export default function ProfileSkillsPage() {
     const diag = await getSupabaseDiagnostics();
     logDiagnostics("save_profile", diag);
 
-    if (diag.isConfigured && !diag.isSignedIn) {
-      const message = "Supabase is configured but you are not signed in. Please sign in to save your profile to Supabase.";
+    if (enabled && configured && !diag.isSignedIn) {
+      const message = "Supabase is configured, but you are not signed in. Please sign in to save your profile to Supabase.";
       setRemoteError(message);
       toast.error({ title: "Not signed in", message });
       return;
     }
 
     if (diag.dataSource !== "supabase") {
-      const message =
-        "Supabase is not configured (missing REACT_APP_SUPABASE_URL/REACT_APP_SUPABASE_ANON_KEY). Cannot perform a live save.";
+      const message = !configured
+        ? "Supabase is not configured (missing REACT_APP_SUPABASE_URL/REACT_APP_SUPABASE_ANON_KEY)."
+        : !enabled
+          ? "Supabase is disabled by feature flag (REACT_APP_FEATURE_FLAGS.enableSupabase=false)."
+          : "Supabase is ready but no active session exists.";
       setRemoteError(message);
-      toast.error({ title: "Supabase not configured", message });
+      toast.error({ title: "Supabase unavailable", message });
       return;
     }
 
@@ -334,17 +352,21 @@ export default function ProfileSkillsPage() {
     const diag = await getSupabaseDiagnostics();
     logDiagnostics("add_skill", diag);
 
-    if (diag.isConfigured && !diag.isSignedIn) {
-      const message = "Supabase is configured but you are not signed in. Please sign in to add skills.";
+    if (enabled && configured && !diag.isSignedIn) {
+      const message = "Supabase is configured, but you are not signed in. Please sign in to add skills.";
       setRemoteError(message);
       toast.error({ title: "Not signed in", message });
       return;
     }
 
     if (diag.dataSource !== "supabase") {
-      const message = "Supabase is not configured. Cannot add skills with live persistence.";
+      const message = !configured
+        ? "Supabase is not configured. Cannot add skills with live persistence."
+        : !enabled
+          ? "Supabase is disabled by feature flag. Cannot add skills with live persistence."
+          : "Supabase requires an active session to add skills.";
       setRemoteError(message);
-      toast.error({ title: "Supabase not configured", message });
+      toast.error({ title: "Supabase unavailable", message });
       return;
     }
 
@@ -379,17 +401,21 @@ export default function ProfileSkillsPage() {
     const diag = await getSupabaseDiagnostics();
     logDiagnostics("remove_skill", diag);
 
-    if (diag.isConfigured && !diag.isSignedIn) {
-      const message = "Supabase is configured but you are not signed in. Please sign in to remove skills.";
+    if (enabled && configured && !diag.isSignedIn) {
+      const message = "Supabase is configured, but you are not signed in. Please sign in to remove skills.";
       setRemoteError(message);
       toast.error({ title: "Not signed in", message });
       return;
     }
 
     if (diag.dataSource !== "supabase") {
-      const message = "Supabase is not configured. Cannot remove skills with live persistence.";
+      const message = !configured
+        ? "Supabase is not configured. Cannot remove skills with live persistence."
+        : !enabled
+          ? "Supabase is disabled by feature flag. Cannot remove skills with live persistence."
+          : "Supabase requires an active session to remove skills.";
       setRemoteError(message);
-      toast.error({ title: "Supabase not configured", message });
+      toast.error({ title: "Supabase unavailable", message });
       return;
     }
 
@@ -397,7 +423,8 @@ export default function ProfileSkillsPage() {
 
     // Prefer deleting by skillName when the local id isn't a UUID from Supabase.
     const looksLikeUuid =
-      typeof skill.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(skill.id);
+      typeof skill.id === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(skill.id);
     const res = await removeSkill(looksLikeUuid ? { id: skill.id } : { skillName: skill.name });
 
     if (!res.ok) {
@@ -427,17 +454,21 @@ export default function ProfileSkillsPage() {
     const diag = await getSupabaseDiagnostics();
     logDiagnostics("update_skill_level", diag);
 
-    if (diag.isConfigured && !diag.isSignedIn) {
-      const message = "Supabase is configured but you are not signed in. Please sign in to update skill proficiency.";
+    if (enabled && configured && !diag.isSignedIn) {
+      const message = "Supabase is configured, but you are not signed in. Please sign in to update skill proficiency.";
       setRemoteError(message);
       toast.error({ title: "Not signed in", message });
       return;
     }
 
     if (diag.dataSource !== "supabase") {
-      const message = "Supabase is not configured. Cannot update skills with live persistence.";
+      const message = !configured
+        ? "Supabase is not configured. Cannot update skills with live persistence."
+        : !enabled
+          ? "Supabase is disabled by feature flag. Cannot update skills with live persistence."
+          : "Supabase requires an active session to update skills.";
       setRemoteError(message);
-      toast.error({ title: "Supabase not configured", message });
+      toast.error({ title: "Supabase unavailable", message });
       return;
     }
 
@@ -500,7 +531,7 @@ export default function ProfileSkillsPage() {
         </>
       }
     >
-      {/* Inline mode banner */}
+      {/* Inline mode banner (must use the same config checks as the rest of the page) */}
       <div style={{ marginBottom: 12 }}>
         <Alert tone="success" title="Data source">
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -508,11 +539,13 @@ export default function ProfileSkillsPage() {
             <span style={{ color: "var(--tv-text-muted)" }}>
               {dataSourceBadge === "supabase"
                 ? "Reads/writes are using Supabase."
-                : hasUrl && hasKey
-                  ? isSignedIn
-                    ? "Supabase is configured but currently unavailable — using mocks."
-                    : "Supabase is configured, but you are not signed in — sign in to enable live persistence."
-                  : "Supabase env vars missing — using mocks."}
+                : !configured
+                  ? "Supabase env vars missing — using mocks."
+                  : !enabled
+                    ? "Supabase is configured but disabled by feature flag — using mocks."
+                    : isSignedIn
+                      ? "Supabase should be active, but client session is not available — using mocks."
+                      : "Supabase is configured, but you are not signed in — sign in to enable live persistence."}
             </span>
           </div>
         </Alert>
