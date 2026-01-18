@@ -7,6 +7,7 @@ import { getEnvConfig, isSupabaseConfigured, isSupabaseEnabled } from "../config
 import { addSkill, getProfileAndSkills, removeSkill, saveProfile } from "../services/supabaseProfile";
 import { getSupabaseClient } from "../services/supabaseClient";
 import { useToast } from "../components/Toast";
+import { EnvDiagnosticsPanel } from "../components/EnvDiagnosticsPanel";
 
 const SKILL_LEVELS = ["Beginner", "Intermediate", "Advanced", "Expert"];
 
@@ -550,6 +551,8 @@ export default function ProfileSkillsPage() {
           </div>
         </Alert>
       </div>
+
+      <EnvDiagnosticsPanel />
 
       {remoteLoading ? (
         <Alert tone="success" title="Loading">
